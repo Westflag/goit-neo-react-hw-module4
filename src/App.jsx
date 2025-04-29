@@ -1,60 +1,93 @@
-import {useEffect, useState} from 'react';
-import Description from './components/description/Description';
-import Options from './components/options/Options';
-import Feedback from './components/feedback/Feedback';
-import Notification from './components/notification/Notification';
+import { useState, useEffect } from 'react';
+import { Toaster } from 'react-hot-toast';
+import Modal from 'react-modal';
 
-const FEEDBACK_STORAGE_KEY = 'feedbackData';
+import { fetchImages } from './api';
+import SearchBar from './components/SearchBar/SearchBar';
+import ImageGallery from './components/ImageGallery/ImageGallery';
+import Loader from './components/Loader/Loader';
+import ErrorMessage from './components/ErrorMessage/ErrorMessage';
+import LoadMoreBtn from './components/LoadMoreBtn/LoadMoreBtn';
+import ImageModal from './components/ImageModal/ImageModal';
+import EmptyState from './components/EmptyState/EmptyState';
 
-const App = () => {
-    const [feedback, setFeedback] = useState(() => {
-        const stored = localStorage.getItem(FEEDBACK_STORAGE_KEY);
-        return stored ? JSON.parse(stored) : {good: 0, neutral: 0, bad: 0};
-    });
+Modal.setAppElement('#root');
 
-    const totalFeedback = feedback.good + feedback.neutral + feedback.bad;
-    const positiveFeedback = totalFeedback ? Math.round((feedback.good / totalFeedback) * 100) : 0;
-
-    const updateFeedback = (feedbackType) => {
-        setFeedback(prev => ({
-            ...prev,
-            [feedbackType]: prev[feedbackType] + 1,
-        }));
-    };
-
-    const resetFeedback = () => {
-        setFeedback({good: 0, neutral: 0, bad: 0});
-    };
+export default function App() {
+    const [query, setQuery] = useState('');
+    const [images, setImages] = useState([]);
+    const [page, setPage] = useState(1);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [showModal, setShowModal] = useState(false);
+    const [largeImage, setLargeImage] = useState({ url: '', alt: '' });
 
     useEffect(() => {
-        localStorage.setItem(FEEDBACK_STORAGE_KEY, JSON.stringify(feedback));
-    }, [feedback]);
+        if (!query) return;
+
+        const loadImages = async () => {
+            try {
+                setIsLoading(true);
+                const data = await fetchImages(query, page);
+                setImages(prev => [...prev, ...data.results]);
+            } catch (error) {
+                setError(error.message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadImages();
+    }, [query, page]);
+
+    const handleSearch = (newQuery) => {
+        setQuery(newQuery);
+        setImages([]);
+        setPage(1);
+        setError(null);
+    };
+
+    const handleLoadMore = () => {
+        setPage(prevPage => prevPage + 1);
+    };
+
+    const openModal = (url, alt) => {
+        setLargeImage({ url, alt });
+        setShowModal(true);
+    };
+
+    const closeModal = () => {
+        setShowModal(false);
+        setLargeImage({ url: '', alt: '' });
+    };
 
     return (
-        <div className="app">
-            <Description
-                title="Sip Happens Café"
-                message="Please leave your feedback about our service by selecting one of the options below."
-            />
+        <>
+            <Toaster />
+            <SearchBar onSubmit={handleSearch} />
 
-            <Options
-                options={['good', 'neutral', 'bad']}
-                onLeaveFeedback={updateFeedback}
-                onReset={resetFeedback}
-                showReset={totalFeedback > 0}
-            />
+            {error && <ErrorMessage message={error} />}
 
-            {totalFeedback > 0 ? (
-                <Feedback
-                    feedback={feedback}
-                    totalFeedback={totalFeedback}
-                    positiveFeedback={positiveFeedback}
+            <ImageGallery images={images} onImageClick={openModal} />
+
+            {!isLoading && images.length === 0 && query && !error && (
+                <EmptyState
+                    title="Nothing found"
+                    message="Try another keyword or check for typos"
                 />
-            ) : (
-                <Notification message="No feedback yet"/>
             )}
-        </div>
-    );
-};
 
-export default App;
+            {isLoading && <Loader />}
+
+            {images.length > 0 && !isLoading && <LoadMoreBtn onClick={handleLoadMore} />}
+
+            <ImageModal
+                isOpen={showModal}
+                onClose={closeModal}
+                image={largeImage.url}
+                alt={largeImage.alt}
+            />
+
+        </>
+    );
+}
