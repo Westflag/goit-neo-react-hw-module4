@@ -17,6 +17,7 @@ export default function App() {
     const [query, setQuery] = useState('');
     const [images, setImages] = useState([]);
     const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
     const [showModal, setShowModal] = useState(false);
@@ -30,6 +31,7 @@ export default function App() {
                 setIsLoading(true);
                 const data = await fetchImages(query, page);
                 setImages(prev => [...prev, ...data.results]);
+                setTotalPages(data.total_pages);
             } catch (error) {
                 setError(error.message);
             } finally {
@@ -79,7 +81,9 @@ export default function App() {
 
             {isLoading && <Loader />}
 
-            {images.length > 0 && !isLoading && <LoadMoreBtn onClick={handleLoadMore} />}
+            {images.length > 0 && !isLoading && page < totalPages && (
+                <LoadMoreBtn onClick={handleLoadMore} />
+            )}
 
             <ImageModal
                 isOpen={showModal}
@@ -87,7 +91,6 @@ export default function App() {
                 image={largeImage.url}
                 alt={largeImage.alt}
             />
-
         </>
     );
 }
